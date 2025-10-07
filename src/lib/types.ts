@@ -13,10 +13,7 @@ export interface Prompt {
   updated_at: string;
 }
 
-export type PromptFormData = Omit<
-  Prompt,
-  "id" | "user_id" | "created_at" | "updated_at"
->;
+export type PromptFormData = Omit<Prompt, "id" | "created_at" | "updated_at">;
 
 export interface AuthResponse {
   user: User | null;

@@ -1,16 +1,6 @@
-// ============================================
 // src/app/layout.tsx
-// ============================================
-import './globals.css';
-import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
-
-const inter = Inter({ subsets: ['latin'] });
-
-export const metadata: Metadata = {
-  title: 'Prompt Manager',
-  description: 'Organize and manage your AI prompts',
-};
+import './globals.css'; // Ensure globals.css is imported
+import Script from 'next/script';
 
 export default function RootLayout({
   children,
@@ -18,8 +8,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
-      <body className={inter.className}>{children}</body>
+    <html lang="en" className="h-full bg-gray-50">
+      <body className="h-full">
+        {children}
+        {/* THIS SCRIPT IS ESSENTIAL FOR THE BUTTON TO RENDER */}
+        <Script src="https://accounts.google.com/gsi/client" strategy="beforeInteractive" />
+      </body>
     </html>
   );
 }

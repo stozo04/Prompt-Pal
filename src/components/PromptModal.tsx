@@ -21,6 +21,7 @@ export default function PromptModal({
   editingPrompt,
 }: PromptModalProps) {
   const [formData, setFormData] = useState<PromptFormData>({
+    user_id: '',
     title: '',
     content: '',
     category: 'Work',
@@ -32,8 +33,27 @@ export default function PromptModal({
   const [showFullImage, setShowFullImage] = useState(false);
 
   const supabase = createClient();
+  const BUCKET = 'prompt_storage';
 
-  const BUCKET = 'prompt_pal';
+  // Fetch user when modal opens (or isOpen changes)
+  useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+    (async () => {
+      const {
+        data: { user },
+        error,
+      } = await supabase.auth.getUser();
+      if (error) {
+        console.error('Error fetching user in PromptModal useEffect', error);
+        return;
+      }
+      if (user) {
+        setFormData((f) => ({ ...f, user_id: user.id }));
+      }
+    })();
+  }, [isOpen, supabase]);
 
   const uploadFile = useCallback(
     async (file: File) => {
@@ -48,6 +68,7 @@ export default function PromptModal({
         if (sessionError) {
           alert('Error checking auth session');
           console.error('Error checking auth session', sessionError);
+          return null;
         }
 
         if (!currentUser) {
@@ -65,8 +86,7 @@ export default function PromptModal({
           return null;
         }
 
-        const id = `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.\-_]/g, '')}`;
-        const path = `prompts/${id}`;
+        const path = `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.\-_]/g, '')}`;
 
         const { error: uploadError } = await supabase.storage
           .from(BUCKET)
@@ -94,6 +114,7 @@ export default function PromptModal({
   useEffect(() => {
     if (editingPrompt) {
       setFormData({
+        user_id: editingPrompt.user_id,
         title: editingPrompt.title,
         content: editingPrompt.content,
         category: editingPrompt.category,
@@ -102,7 +123,14 @@ export default function PromptModal({
       });
       setLocalPreview(editingPrompt.image_url ?? null);
     } else {
-      setFormData({ title: '', content: '', category: 'Work', image_url: null, ai_provider: 'OpenAI' });
+      setFormData({
+        user_id: '',
+        title: '',
+        content: '',
+        category: 'Work',
+        image_url: null,
+        ai_provider: 'OpenAI',
+      });
       setLocalPreview(null);
     }
   }, [editingPrompt]);
@@ -126,18 +154,42 @@ export default function PromptModal({
     e.preventDefault();
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!formData.title || !formData.content) {
       alert('Please fill in all required fields');
       return;
     }
 
+    // As a safety, re-check user before submit
+    const {
+      data: { user },
+      error: sessionError,
+    } = await supabase.auth.getUser();
+    if (sessionError) {
+      console.error('Error fetching user in handleSubmit', sessionError);
+      alert('Error validating session');
+      return;
+    }
+    if (!user) {
+      alert('You must be signed in to submit.');
+      return;
+    }
+
     onSubmit({
       ...formData,
+      user_id: user.id,
       image_url: formData.category === 'Art' ? formData.image_url : null,
     });
 
-    setFormData({ title: '', content: '', category: 'Work', image_url: null, ai_provider: 'OpenAI' });
+    setFormData({
+      user_id: '',
+      title: '',
+      content: '',
+      category: 'Work',
+      image_url: null,
+      ai_provider: 'OpenAI',
+    });
+    setLocalPreview(null);
   };
 
   if (!isOpen) return null;
@@ -329,7 +381,6 @@ export default function PromptModal({
         </div>
       </div>
 
-      {/* Full-size image modal */}
       {showFullImage && localPreview && (
         <div
           className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center p-4 z-[60]"
