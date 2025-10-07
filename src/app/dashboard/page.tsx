@@ -10,12 +10,16 @@ import PromptModal from '@/components/PromptModal';
 import AuthButton from '@/components/AuthButton';
 import SearchBar from '@/components/SearchBar';
 import { useRouter } from 'next/navigation';
+import { createBrowserClient } from '@supabase/ssr/dist/main/createBrowserClient';
 
 const categories = ['All', 'Work', 'Personal', 'Art'];
 
 export default function Dashboard() {
   const router = useRouter();
-  const supabase = createClient();
+  const supabase = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
   const [prompts, setPrompts] = useState<Prompt[]>([]);
   const [filteredPrompts, setFilteredPrompts] = useState<Prompt[]>([]);
   const [selectedCategory, setSelectedCategory] = useState('All');
@@ -26,6 +30,7 @@ export default function Dashboard() {
 
   const checkUser = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
+    console.log('user: ', user)
     if (!user) {
       router.push('/login');
     }
@@ -97,7 +102,10 @@ export default function Dashboard() {
 
     const { error } = await supabase
       .from('prompts')
-      .update(data)
+      .update({
+        ...data,
+        ai_provider: data.ai_provider ?? 'OpenAI',
+      })
       .eq('id', editingPrompt.id);
 
     if (error) {

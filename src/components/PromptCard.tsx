@@ -56,6 +56,9 @@ export default function PromptCard({ prompt, onEdit, onDelete }: PromptCardProps
             >
               {prompt.category}
             </span>
+            <span className="ml-2 inline-block px-2 py-1 text-xs font-medium rounded bg-gray-100 text-gray-700">
+              {prompt.ai_provider}
+            </span>
           </div>
         </div>
         <p className="text-gray-600 mb-4 line-clamp-3">{prompt.content}</p>

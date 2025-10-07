@@ -3,8 +3,9 @@
 
 import { Prompt, PromptFormData } from '@/lib/types';
 import { X, Image as ImageIcon } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Image from 'next/image';
+import { createClient } from '@/lib/supabase/client';
 
 interface PromptModalProps {
   isOpen: boolean;
@@ -24,7 +25,73 @@ export default function PromptModal({
     content: '',
     category: 'Work',
     image_url: null,
+    ai_provider: 'OpenAI',
   });
+  const [uploading, setUploading] = useState(false);
+  const [localPreview, setLocalPreview] = useState<string | null>(null);
+
+  const supabase = createClient();
+
+  const BUCKET = 'prompt_pal';
+
+  const uploadFile = useCallback(
+    async (file: File) => {
+      try {
+        setUploading(true);
+
+        // Ensure user is signed in. Storage insert operations may be blocked
+        // by Row Level Security (RLS) if performed anonymously.
+        const {
+          data: { user: currentUser },
+          error: sessionError,
+        } = await supabase.auth.getUser();
+
+        if (sessionError) {
+          alert('Error checking auth session');
+          console.error('Error checking auth session', sessionError);
+        }
+
+        if (!currentUser) {
+          alert('You must be signed in to upload images. Please sign in and try again.');
+          return null;
+        }
+
+        // Basic validation
+        if (!file.type.startsWith('image/')) {
+          alert('Only image files are allowed');
+          return null;
+        }
+        const MAX_BYTES = 5 * 1024 * 1024; // 5MB
+        if (file.size > MAX_BYTES) {
+          alert('Image must be smaller than 5MB');
+          return null;
+        }
+
+        const id = `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.\-_]/g, '')}`;
+        const path = `prompts/${id}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from(BUCKET)
+          .upload(path, file, { cacheControl: '3600', upsert: false });
+
+        if (uploadError) {
+          console.error('Upload error', uploadError);
+          alert('Error uploading image: ' + uploadError.message);
+          return null;
+        }
+
+        const { data } = supabase.storage.from(BUCKET).getPublicUrl(path);
+        return data.publicUrl;
+      } catch (err) {
+        console.error(err);
+        alert('Unexpected error uploading image');
+        return null;
+      } finally {
+        setUploading(false);
+      }
+    },
+    [supabase]
+  );
 
   useEffect(() => {
     if (editingPrompt) {
@@ -33,11 +100,33 @@ export default function PromptModal({
         content: editingPrompt.content,
         category: editingPrompt.category,
         image_url: editingPrompt.image_url,
+        ai_provider: editingPrompt.ai_provider ?? 'OpenAI',
       });
+      setLocalPreview(editingPrompt.image_url ?? null);
     } else {
-      setFormData({ title: '', content: '', category: 'Work', image_url: null });
+      setFormData({ title: '', content: '', category: 'Work', image_url: null, ai_provider: 'OpenAI' });
+      setLocalPreview(null);
     }
   }, [editingPrompt]);
+
+  const handleFileSelect = async (file?: File | null) => {
+    if (!file) return;
+    const publicUrl = await uploadFile(file);
+    if (publicUrl) {
+      setFormData((s) => ({ ...s, image_url: publicUrl }));
+      setLocalPreview(publicUrl);
+    }
+  };
+
+  const handleDrop = async (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    const f = e.dataTransfer.files?.[0];
+    if (f) await handleFileSelect(f);
+  };
+
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+  };
 
   const handleSubmit = () => {
     if (!formData.title || !formData.content) {
@@ -50,7 +139,7 @@ export default function PromptModal({
       image_url: formData.category === 'Art' ? formData.image_url : null,
     });
 
-    setFormData({ title: '', content: '', category: 'Work', image_url: null });
+    setFormData({ title: '', content: '', category: 'Work', image_url: null, ai_provider: 'OpenAI' });
   };
 
   if (!isOpen) return null;
@@ -109,6 +198,24 @@ export default function PromptModal({
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
+                AI Provider *
+              </label>
+              <select
+                value={formData.ai_provider}
+                onChange={(e) =>
+                  setFormData({ ...formData, ai_provider: e.target.value as any })
+                }
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value="xAI">xAI</option>
+                <option value="OpenAI">OpenAI</option>
+                <option value="Gemini">Gemini</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
                 Prompt Content *
               </label>
               <textarea
@@ -126,27 +233,77 @@ export default function PromptModal({
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   <ImageIcon className="w-4 h-4 inline mr-1" />
-                  Image URL (Optional)
+                  Image (Optional)
                 </label>
-                <input
-                  type="url"
-                  value={formData.image_url || ''}
-                  onChange={(e) =>
-                    setFormData({ ...formData, image_url: e.target.value })
-                  }
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="https://example.com/image.jpg"
-                />
-                {formData.image_url && (
-                  <div className="mt-2 relative w-full h-48">
-                    <Image
-                      src={formData.image_url}
-                      alt="Preview"
-                      fill
-                      className="object-cover rounded"
-                      sizes="(max-width: 768px) 100vw, 600px"
-                    />
+
+                {!localPreview ? (
+                  // Show upload area only if no image
+                  <div
+                    onDrop={handleDrop}
+                    onDragOver={handleDragOver}
+                    className="w-full px-4 py-6 border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center text-center text-sm text-gray-500 hover:border-gray-400"
+                  >
+                    <p className="mb-2">Drag & drop an image here, or</p>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="sr-only"
+                        onChange={async (e) => {
+                          const f = e.target.files?.[0] ?? null;
+                          await handleFileSelect(f);
+                          if (e.target) {
+                            e.target.value = '';
+                          }
+                        }}
+                      />
+                      <span className="px-4 py-2 bg-white border rounded shadow-sm text-blue-600 hover:bg-blue-50">
+                        Select file
+                      </span>
+                    </label>
+
+                    {uploading && <p className="mt-2 text-xs text-gray-400">Uploading...</p>}
                   </div>
+                ) : (
+                  // Show preview with change/remove buttons
+                  <div className="space-y-2">
+                    <div className="relative w-full h-64 rounded overflow-hidden border border-gray-300 bg-gray-100">
+                      <Image
+                          src={localPreview}
+                          alt="Preview"
+                          fill
+                          className="object-contain"  // ← Changed from object-cover
+                          sizes="(max-width: 768px) 100vw, 600px"
+                        />
+                      </div>
+                      <div className="flex gap-2">
+                        <label className="flex-1 px-3 py-2 text-sm border border-gray-300 text-gray-700 rounded hover:bg-gray-50 transition-colors cursor-pointer text-center">
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="sr-only"
+                            onChange={async (e) => {
+                              const f = e.target.files?.[0] ?? null;
+                              await handleFileSelect(f);
+                              if (e.target) {
+                                e.target.value = '';
+                              }
+                            }}
+                          />
+                          Change Image
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setLocalPreview(null);
+                            setFormData((s) => ({ ...s, image_url: null }));
+                          }}
+                          className="flex-1 px-3 py-2 text-sm border border-red-300 text-red-600 rounded hover:bg-red-50 transition-colors"
+                        >
+                          Remove Image
+                        </button>
+                      </div>
+                    </div>
                 )}
               </div>
             )}
