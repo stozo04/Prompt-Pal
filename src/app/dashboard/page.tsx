@@ -38,15 +38,25 @@ export default function Dashboard() {
 
   const fetchPrompts = useCallback(async () => {
     setLoading(true);
+    // get current user and fetch only their prompts
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      setPrompts([]);
+      setLoading(false);
+      return;
+    }
+
     const { data, error } = await supabase
       .from('prompts')
       .select('*')
+      .eq('user_id', user.id)
       .order('created_at', { ascending: false });
 
     if (error) {
       console.error('Error fetching prompts:', error);
+      setPrompts([]);
     } else {
-      setPrompts(data || []);
+      setPrompts((data as Prompt[]) || []);
     }
     setLoading(false);
   }, [supabase]);

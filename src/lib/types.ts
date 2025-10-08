@@ -8,6 +8,7 @@ export interface Prompt {
   content: string;
   category: "Work" | "Personal" | "Art";
   ai_provider: "xAI" | "OpenAI" | "Gemini" | "Other";
+  description: string;
   image_url: string | null;
   created_at: string;
   updated_at: string;

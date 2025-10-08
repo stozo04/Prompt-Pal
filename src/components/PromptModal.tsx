@@ -24,6 +24,7 @@ export default function PromptModal({
     user_id: '',
     title: '',
     content: '',
+    description: '',
     category: 'Work',
     image_url: null,
     ai_provider: 'OpenAI',
@@ -116,6 +117,7 @@ export default function PromptModal({
       setFormData({
         user_id: editingPrompt.user_id,
         title: editingPrompt.title,
+        description: editingPrompt.description ?? '',
         content: editingPrompt.content,
         category: editingPrompt.category,
         image_url: editingPrompt.image_url,
@@ -126,6 +128,7 @@ export default function PromptModal({
       setFormData({
         user_id: '',
         title: '',
+        description: '',
         content: '',
         category: 'Work',
         image_url: null,
@@ -185,6 +188,7 @@ export default function PromptModal({
       user_id: '',
       title: '',
       content: '',
+      description: '',
       category: 'Work',
       image_url: null,
       ai_provider: 'OpenAI',
@@ -264,7 +268,19 @@ export default function PromptModal({
                   <option value="Other">Other</option>
                 </select>
               </div>
-
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Prompt Description
+                </label>
+                <textarea
+                  value={formData.description}
+                  onChange={(e) =>
+                    setFormData({ ...formData, description: e.target.value })
+                  }
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-y min-h-[150px]"
+                  placeholder="description..."
+                />
+              </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Prompt Content *

@@ -61,7 +61,7 @@ export default function PromptCard({ prompt, onEdit, onDelete }: PromptCardProps
             </span>
           </div>
         </div>
-        <p className="text-gray-600 mb-4 line-clamp-3">{prompt.content}</p>
+        <p className="text-gray-600 mb-4 line-clamp-3">{prompt.description}</p>
         <div className="flex gap-2">
           <button
             onClick={handleCopy}
