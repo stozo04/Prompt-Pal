@@ -1,69 +1,29 @@
 // src/app/login/page.tsx
 'use client';
-import { useEffect, useState, useRef } from 'react';
+import { createBrowserClient } from '@supabase/ssr'
 
 export default function Login() {
-  const [loading, setLoading] = useState(false);
-  const [clientReady, setClientReady] = useState(false);
-  const supabaseRef = useRef<any>(null);
+  const supabase = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
 
-  useEffect(() => {
-    // Dynamically import the browser-only helper and create the client only on the client
-    let mounted = true;
-    (async () => {
-      const { createBrowserClient } = await import('@supabase/ssr');
-
-      // createBrowserClient uses document (cookies) internally; ensure we run this only in browser
-      supabaseRef.current = createBrowserClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-        {
-          cookies: {
-            get(name: string) {
-              return document.cookie
-                .split('; ')
-                .find((row) => row.startsWith(`${name}=`))
-                ?.split('=')[1];
-            },
-            set(name: string, value: string, options: any) {
-              document.cookie = `${name}=${value}; path=/; ${options?.maxAge ? `max-age=${options.maxAge};` : ''}`;
-            },
-            remove(name: string, options: any) {
-              document.cookie = `${name}=; path=/; max-age=0`;
-            },
-          },
-        }
-      );
-
-      if (mounted) setClientReady(true);
-    })();
-
-    return () => {
-      mounted = false;
-    };
-  }, []);
 
   const handleGoogleLogin = async () => {
-    if (!clientReady || !supabaseRef.current) return;
-
-    setLoading(true);
     try {
-      const supabase = supabaseRef.current;
-
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
           redirectTo: `${window.location.origin}/auth/callback`,
           queryParams: {
-            prompt: 'consent',
-          },
+            prompt: 'consent' // This forces Google to show the consent screen
+          }
         },
       });
 
       if (error) throw error;
     } catch (error) {
       console.error('Error:', error);
-      setLoading(false);
     }
   };
 
@@ -77,7 +37,6 @@ export default function Login() {
 
         <button
           onClick={handleGoogleLogin}
-          disabled={loading || !clientReady}
           className="w-full flex items-center justify-center gap-3 bg-white border-2 border-gray-300 text-gray-700 px-6 py-3 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <svg className="w-5 h-5" viewBox="0 0 24 24">
@@ -86,7 +45,6 @@ export default function Login() {
             <path fill="currentColor" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
             <path fill="currentColor" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
           </svg>
-          {loading ? 'Signing in...' : clientReady ? 'Continue with Google' : 'Preparing...'}
         </button>
       </div>
     </div>
